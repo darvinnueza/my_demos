@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Config Activity</title>
+    <script src="https://unpkg.com/postmonger"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+        }
+
+        label {
+            margin-top: 10px;
+            display: block;
+        }
+
+        input, select {
+            width: 100%;
+            padding: 5px;
+            margin-bottom: 10px;
+        }
+
+        #previewArea {
+            margin: 20px auto 0 auto;  /* margen superior de 20px y centrado horizontal con auto */
+            padding: 0;
+            border: 1px solid #ddd;
+            width: 50%;                /* ocupa el 50% del ancho */
+            border-radius: 12px;
+            font-family: Arial, sans-serif;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            display: none;
+            background-color: #fff;
+            overflow: hidden;
+        }
+
+        #previewImagen {
+            width: 100%;
+            display: none;
+        }
+
+        .preview-content {
+            padding: 15px;
+            text-align: center;
+        }
+
+        #previewMensaje {
+            font-weight: bold;
+            font-size: 18px;
+            margin-bottom: 8px;
+            color: #1d1d1f;
+        }
+
+        #previewSubMensaje {
+            font-size: 16px;
+            color: #4a4a4a;
+            margin-bottom: 14px;
+            display: none;
+        }
+
+        #previewBoton {
+            display: none;
+            color: #b9410c;
+            text-decoration: none;
+            font-weight: bold;
+            font-size: 17px;
+        }
+
+        #previewDirectUrl {
+            display: none;
+            font-size: 13px;
+            color: #007bff;
+            word-break: break-word;
+        }
+    </style>
+</head>
+<body>
+
+<h2>Configurar mensaje RCS</h2>
+
+<label>Plantilla:</label>
+<select id="plantilla" onchange="cambiarPlantilla()">
+    <option value="texto_imagen">Texto + Imagen</option>
+    <option value="texto_boton">Texto + Botón</option>
+    <option value="texto_imagen_url_boton">Texto + Imagen + URL + Botón</option>
+    <option value="texto_imagen_url">Texto + Imagen + URL</option>
+</select>
+
+<div id="campoMensaje">
+    <label>Título:</label>
+    <input type="text" id="mensaje" placeholder="Ej: ¡Tu Redmi con 35% OFF en RED Days! 🔥">
+</div>
+
+<div id="campoSubMensaje" style="display: none;">
+    <label>Subtítulo:</label>
+    <input type="text" id="submensaje" placeholder="Ej: Estrénalo a cuotas, envío gratis y más.">
+</div>
+
+<div id="campoBoton" style="display: none;">
+    <label>Texto del Botón:</label>
+    <input type="text" id="botonLabel" placeholder="Ej: Cómpralo aquí">
+    <label>URL del Botón:</label>
+    <input type="text" id="botonUrl" placeholder="https://promo.com">
+</div>
+
+<div id="campoImagen" style="display: none;">
+    <label>URL de Imagen:</label>
+    <input type="text" id="mediaUrl" placeholder="https://midominio.com/imagen.jpg">
+</div>
+
+<div id="campoUrl" style="display: none;">
+    <label>URL directa (sin botón):</label>
+    <input type="text" id="directUrl" placeholder="https://midominio.com/destino">
+</div>
+
+<button onclick="preview()">Previsualizar mensaje</button>
+
+<div id="previewArea">
+    <img id="previewImagen" src="" />
+    <div class="preview-content">
+        <p id="previewMensaje"></p>
+        <p id="previewSubMensaje"></p>
+        <a id="previewBoton" href="#" target="_blank"></a>
+        <a id="previewDirectUrl" href="#" target="_blank"></a>
+    </div>
+</div>
+
+<script>
+    const connection = new Postmonger.Session();
+    let payload = {};
+
+    connection.on("initActivity", function (data) {
+        payload = data;
+    });
+
+    connection.on("requestedPayload", function () {
+        const plantilla = document.getElementById("plantilla").value;
+        const mensaje = document.getElementById("mensaje").value;
+        const submensaje = document.getElementById("submensaje").value;
+
+        const inArgs = [{
+            message: mensaje,
+            messageType: "RCS_RBM_TEXT"
+        }];
+
+        if (plantilla === "texto_imagen_url_boton" && submensaje) {
+            inArgs[0].subMessage = submensaje;
+        }
+
+        if (plantilla.includes("imagen")) {
+            inArgs[0].mediaUrl = document.getElementById("mediaUrl").value;
+        }
+
+        if (plantilla.includes("boton")) {
+            inArgs[0].buttons = [{
+                label: document.getElementById("botonLabel").value,
+                action: "url",
+                url: document.getElementById("botonUrl").value
+            }];
+        }
+
+        if (plantilla.includes("url")) {
+            inArgs[0].url = document.getElementById("directUrl").value;
+        }
+
+        payload.arguments = payload.arguments || {};
+        payload.arguments.execute = payload.arguments.execute || {};
+        payload.arguments.execute.inArguments = inArgs;
+        payload.metaData.isConfigured = true;
+
+        connection.trigger("updateActivity", payload);
+    });
+
+    connection.trigger("ready");
+
+    function cambiarPlantilla() {
+        const plantilla = document.getElementById("plantilla").value;
+
+        document.getElementById("campoBoton").style.display = plantilla.includes("boton") ? "block" : "none";
+        document.getElementById("campoImagen").style.display = plantilla.includes("imagen") ? "block" : "none";
+        document.getElementById("campoUrl").style.display = plantilla.includes("url") ? "block" : "none";
+        document.getElementById("campoSubMensaje").style.display = plantilla === "texto_imagen_url_boton" ? "block" : "none";
+
+        document.getElementById("previewArea").style.display = "none";
+        document.getElementById("previewMensaje").innerText = "";
+        document.getElementById("previewSubMensaje").innerText = "";
+        document.getElementById("previewSubMensaje").style.display = "none";
+        document.getElementById("previewImagen").style.display = "none";
+        document.getElementById("previewImagen").src = "";
+        document.getElementById("previewBoton").style.display = "none";
+        document.getElementById("previewDirectUrl").style.display = "none";
+        document.getElementById("previewBoton").href = "#";
+        document.getElementById("previewDirectUrl").href = "#";
+
+        document.getElementById("mensaje").value = "";
+        document.getElementById("submensaje").value = "";
+        document.getElementById("mediaUrl").value = "";
+        document.getElementById("botonLabel").value = "";
+        document.getElementById("botonUrl").value = "";
+        document.getElementById("directUrl").value = "";
+    }
+
+    function preview() {
+        const plantilla = document.getElementById("plantilla").value;
+        const mensaje = document.getElementById("mensaje").value;
+        const submensaje = document.getElementById("submensaje").value;
+        const imagen = document.getElementById("mediaUrl").value;
+        const label = document.getElementById("botonLabel").value;
+        const botonUrl = document.getElementById("botonUrl").value;
+        const directUrl = document.getElementById("directUrl").value;
+
+        document.getElementById("previewArea").style.display = "block";
+
+        const img = document.getElementById("previewImagen");
+        if (plantilla.includes("imagen") && imagen) {
+            img.src = imagen;
+            img.style.display = "block";
+        } else {
+            img.style.display = "none";
+        }
+
+        const title = document.getElementById("previewMensaje");
+        title.innerText = mensaje;
+
+        const sub = document.getElementById("previewSubMensaje");
+        if (plantilla === "texto_imagen_url_boton" && submensaje) {
+            sub.innerText = submensaje;
+            sub.style.display = "block";
+        } else {
+            sub.style.display = "none";
+        }
+
+        const btn = document.getElementById("previewBoton");
+        if (plantilla.includes("boton") && label && botonUrl) {
+            btn.innerText = label;
+            btn.href = botonUrl;
+            btn.style.display = "inline-block";
+        } else {
+            btn.style.display = "none";
+        }
+
+        const direct = document.getElementById("previewDirectUrl");
+        if (plantilla.includes("url") && directUrl) {
+            direct.href = directUrl;
+            direct.innerText = directUrl;
+            direct.style.display = "block";
+        } else {
+            direct.style.display = "none";
+        }
+    }
+
+    cambiarPlantilla();
+</script>
+
+</body>
+</html>
